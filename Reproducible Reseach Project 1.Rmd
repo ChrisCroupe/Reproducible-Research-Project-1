@@ -1,0 +1,178 @@
+---
+title: "Reproducible Research Project 1"
+author: "Chris Croupe"
+date: "3/28/2020"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I used the zoo library in the process of converting the NA values to the mean of their surrounding values
+
+```{r}
+library(zoo)
+```
+
+### Submission point #1
+
+Here is the code to get the data for the project
+```{r}
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+
+data_file <- "activity.csv"
+
+## Download and unzip the dataset:
+if (!file.exists(data_file)){
+        download.file(url, "repdata_data_activity.zip")
+ }  
+
+if (!file.exists(data_file)) { 
+        unzip("repdata_data_activity.zip") 
+}
+```
+
+Here is the code to read the required data set into the environment
+```{r}
+activity_data <- read.csv(data_file, header = TRUE, sep = ",")
+```
+
+
+### Submission point #2   
+Here is the code to calculate and view the total number of steps taken each day  
+
+I created both a histogram and a bar chart to look at this data - although  the bar chart was not specifically required
+
+```{r}
+## Get the aggregate number of steps by day 
+daily_total <- aggregate(activity_data$steps, by=list(activity_data$date), FUN = sum, na.rm = TRUE)
+names(daily_total) <- c("date", "steps")
+
+## make a histogram of the daily totals
+hist(as.numeric(daily_total$steps), xlab = "Total Steps per Day", main = "Histogram of Steps Taken in a Day Over the Period")
+
+## I'm not sure if the instructions are actually looking for a histogram or a view of the actual steps taken each day
+## so I made this as well
+barplot(daily_total$steps, ylab = "Steps", xlab = "Day", col = "blue", 
+        main = "Steps per Day")
+```
+
+### Submission point #3  
+Here is the code to get the mean and median number of steps taken each day
+
+```{r}
+## Get the mean and median number of steps each day - initially I looked at this as the mean number of step per interval
+## but the more I look at it the more it seems like the question is asking for the single number mean and median
+## number of steps per day across the period of observation - which is available in the call to summary 
+daily_total <- aggregate(activity_data$steps, by=list(activity_data$date), FUN = sum, na.rm = TRUE)
+names(daily_total) <- c("date", "average_steps")
+summary(daily_total)
+```
+
+
+### Submission point #4  
+Here is the code to plot the time series of avaerage number of steps taken per interval each day
+
+```{r}
+daily_mean <- aggregate(activity_data$steps, by=list(activity_data$date), FUN = mean, na.rm = TRUE)
+names(daily_mean) <- c("date", "average_steps")
+
+## Plot the mean steps each day
+plot(as.Date(daily_mean$date), daily_mean$average_steps, type = "l", lty = 1,   col = "green",
+     xlab = "Day", ylab = "Average number of steps per interval", 
+     main = "Average Number of Steps Over the Observation Period")
+```
+
+### Submission point #5   
+Here is the code to find the 5-minute interval that, on average, containss the maximum number of steps
+
+```{r}
+## Find the interval that on average, has the maximum number of steps
+interval_mean <- aggregate(activity_data$steps, by=list(activity_data$interval), FUN = mean, na.rm=TRUE)
+names(interval_mean) <- c("interval", "mean_steps")
+max_interval <- interval_mean[which.max(interval_mean$mean_steps),]
+max_interval <- max_interval[,1]
+max_interval
+```
+
+
+### Submission point #6  
+Here is the code take a look at the NAs and the method to impune the data - I took a simple average of the two data  
+observations from the intervals immediately prior to and post the NA observation.  I used the na.locf function of the zoo  
+library to do this in a simple way.
+
+```{r}
+## How many NAs are there?
+count_NAs <- sum (!complete.cases(activity_data))
+percent_NAs <- count_NAs/nrow(activity_data)
+count_NAs
+percent_NAs
+
+## Find a more elegant way to deal with the NAs
+## Using the na.locf function (found on Stack Overflow) - this function does not work if the first or last
+## observations are 0 - so I hard set those to 0.
+
+head(activity_data) ## look at activity_data pre-data smoothing
+
+activity_data$steps[1] = 0
+activity_data$steps[17568] = 0 
+activity_data$steps <- (na.locf(activity_data$steps) + rev(na.locf(rev(activity_data$steps))))/2
+
+head(activity_data) ## look at activity_data post-data smoothing
+```
+
+### Submission point #7     
+Here is the code to re-run the histogram and bar charts from submission point #2 - but this time with the imputed NAs
+
+```{r}
+## re-run the histogram and bar plots with the data smoothed
+
+## Get the aggregate number of steps by day 
+daily_total <- aggregate(activity_data$steps, by=list(activity_data$date), FUN = sum, na.rm = TRUE)
+names(daily_total) <- c("date", "steps")
+
+## make a histogram of the daily totals
+hist(as.numeric(daily_total$steps), xlab = "Total Steps per Day", 
+     main = "Histogram of Steps Taken in a Day Over the Period (Smoothed)")
+
+## I'm not sure if the istructions are actually looking for a histogram or a view of the actual steps taken each day
+## so I made this as well
+barplot(daily_total$steps, ylab = "Steps", xlab = "Day", col = "blue", 
+        main = "Steps per Day (Smoothed)")
+```
+
+### Submission point #8
+Here is the code to compare the weekend activity vs. weekdays - I think I did a bit of brute-force coding to 
+break out the weekends for the weekdays and this could be more elegant - but it works
+
+```{r}
+## Compare weekday to weekend steps
+## Identify weekdays and weekends
+activity_data$Day <- weekdays(as.Date(activity_data$date))
+weekend <- c("Saturday", "Sunday")
+activity_data$Weekend <- factor(activity_data$Day %in% weekend, levels = c(FALSE, TRUE), labels = c("weekday", "weekend"))
+
+## Get the weekend and weekday interval averages
+days_interval_mean <- aggregate(activity_data$steps, by=list(activity_data$Weekend, activity_data$interval), 
+                                   FUN = mean, na.rm=TRUE)
+names(days_interval_mean) <- c("Weekend", "interval", "average_steps")
+
+weekend_interval_mean <- subset(days_interval_mean, Weekend == "weekend")
+weekday_interval_mean <- subset(days_interval_mean, Weekend == "weekday")
+
+summary(weekend_interval_mean)
+summary(weekday_interval_mean)
+
+## plot in a couple frames
+par(mfrow=c(2,1))
+
+plot(x = strptime(weekday_interval_mean$interval, format("%H%M")), y = weekday_interval_mean$average_steps, type = "l", lty = 1,   col = "blue",
+     xlab = "Interval", ylab = "Average number of steps", 
+     main = "Average Number of Weekday Steps by Interval", ylim = c(0,150))
+    
+plot(x = strptime(weekend_interval_mean$interval, format("%H%M")), y = weekend_interval_mean$average_steps, type = "l", lty = 1,   col = "purple",
+     xlab = "Interval", ylab = "Average number of steps", 
+     main = "Average Number of Weekend Steps by Interval", ylim = c(0,150))
+```
